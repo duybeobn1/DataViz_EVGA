@@ -28,8 +28,6 @@ Through interactive D3.js visualizations, the project highlights:
 - **Frontend:** HTML, CSS, JavaScript  
 - **Visualization:** D3.js v7  
 - **Hosting:** GitHub Pages (.io)  
-- **Data source:**  
-  *Water Efficiency Dataset for African Data Centers*  
 
 ---
 
