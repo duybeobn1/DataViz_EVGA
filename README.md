@@ -39,6 +39,45 @@ Through interactive D3.js visualizations, the project highlights:
 
 ---
 
+## 🚀 Installation & Setup
+1. Clone the project
+
+```bash
+git clone https://github.com/DeankoontzG/DataViz_EVGA.git
+cd water-efficiency-africa
+```
+
+2. Create the Conda environment
+
+Make sure you have Conda installed.
+
+```bash
+conda env create -f environment.yml
+```
+
+Then activate it:
+
+```bash
+conda activate water-efficiency-africa
+```
+
+3. Run a local development server
+
+The visualization uses HTML + D3.js, so a static server is required.
+If Node.js is installed (included in the environment):
+
+```bash
+npx http-server .
+```
+
+Then open:
+
+```bash
+http://localhost:8080
+```
+
+---
+
 ## 👥 Team
 - Edgar Demeude
 - Ghuilhem Dupuy
