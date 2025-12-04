@@ -85,7 +85,7 @@ d3.csv("../data/exported/country_year_cleaned.csv").then(function (data) {
         const dataByCountry = d3.group(cleanData, d => d.country);
 
         for (let feature of jsonData.features) {
-            const countryName = feature.properties.name;
+            const countryName = feature.properties.name_long;
             const lignes = dataByCountry.get(countryName) || [];
 
             feature.properties.donneesAnnuelles = lignes.map(row => ({
