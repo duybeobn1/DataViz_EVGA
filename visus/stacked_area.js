@@ -1,9 +1,21 @@
-// --- Configuration ---
-const margin = { top: 40, right: 180, bottom: 50, left: 60 };
-const width = 960 - margin.left - margin.right;
-const height = 500 - margin.top - margin.bottom;
+const config = {
+    margin: { top: 60, right: 200, bottom: 70, left: 80 },
+    width: 1100,
+    height: 550,
+    transitionDuration: 750,
+    colors: {
+        coal: "#34495e",
+        oil: "#e74c3c", 
+        gas: "#95a5a6",
+        lowCarbon: "#27ae60"
+    }
+};
 
-// Sélection des colonnes à visualiser
+// Calculate responsive dimensions
+const width = config.width - config.margin.left - config.margin.right;
+const height = config.height - config.margin.top - config.margin.bottom;
+
+// Data keys for energy sources
 const keys = [
     "Coal consumption - TWh",
     "Oil consumption - TWh", 
@@ -11,101 +23,117 @@ const keys = [
     "Low carbon - TWh"
 ];
 
-// Couleurs
+// Professional color scale
 const colorScale = d3.scaleOrdinal()
-  .domain(keys)
-  .range(["#2c3e50", "#e74c3c", "#95a5a6", "#27ae60"]);
+    .domain(keys)
+    .range([
+        config.colors.coal,
+        config.colors.oil,
+        config.colors.gas,
+        config.colors.lowCarbon
+    ]);
 
-// Labels
+// Clean labels for legend
 const labels = {
-    "Coal consumption - TWh": "Charbon",
-    "Oil consumption - TWh": "Pétrole",
-    "Gas consumption - TWh": "Gaz",
-    "Low carbon - TWh": "Bas Carbone (Renouvelables)"
+    "Coal consumption - TWh": "Coal",
+    "Oil consumption - TWh": "Oil",
+    "Gas consumption - TWh": "Natural Gas",
+    "Low carbon - TWh": "Low-Carbon Sources"
 };
 
-// --- Initialisation du SVG ---
+// Initialize SVG with proper structure
 const svg = d3.select("#chart")
-  .append("svg")
-  .attr("width", width + margin.left + margin.right)
-  .attr("height", height + margin.top + margin.bottom)
-  .append("g")
-  .attr("transform", `translate(${margin.left},${margin.top})`);
+    .append("svg")
+    .attr("width", config.width)
+    .attr("height", config.height)
+    .attr("viewBox", `0 0 ${config.width} ${config.height}`)
+    .attr("preserveAspectRatio", "xMidYMid meet")
+    .append("g")
+    .attr("transform", `translate(${config.margin.left},${config.margin.top})`);
 
 // Tooltip
 const tooltip = d3.select("#tooltip");
 
-// Variables globales pour les données
+// Global data storage
 let monthlyData = [];
 let yearlyData = [];
 let climateData = [];
+let countrySourceCount = new Map();
 
-// --- Fonction pour compter les sources d'énergie actives ---
+// --- Utility Functions ---
+
 function countEnergySources(countryDataArray) {
-    // Agrège toutes les valeurs pour le pays
     const totals = {
         coal: 0,
         oil: 0,
         gas: 0,
-        lowcarbon: 0
+        lowCarbon: 0
     };
     
     countryDataArray.forEach(d => {
         totals.coal += d["Coal consumption - TWh"] || 0;
         totals.oil += d["Oil consumption - TWh"] || 0;
         totals.gas += d["Gas consumption - TWh"] || 0;
-        totals.lowcarbon += d["Low carbon - TWh"] || 0;
+        totals.lowCarbon += d["Low carbon - TWh"] || 0;
     });
     
-    // Compte combien de sources sont significatives (> 1 TWh au total)
     let activeCount = 0;
     if (totals.coal > 1) activeCount++;
     if (totals.oil > 1) activeCount++;
     if (totals.gas > 1) activeCount++;
-    if (totals.lowcarbon > 1) activeCount++;
+    if (totals.lowCarbon > 1) activeCount++;
     
-    return activeCount;
+    return { count: activeCount, totals };
 }
 
-// --- Chargement des Données ---
+function formatNumber(num) {
+    return new Intl.NumberFormat('en-US', {
+        maximumFractionDigits: 1,
+        minimumFractionDigits: 0
+    }).format(num);
+}
+
+// --- Data Loading ---
 Promise.all([
     d3.csv("../data/exported/country_month_cleaned.csv"),
     d3.csv("../data/exported/country_year_cleaned.csv"),
     d3.csv("../data/exported/climate_summary.csv")
 ]).then(([dataMonth, dataYear, dataClimate]) => {
     
-    // 1. Parsing des données mensuelles
+    // Process monthly data
     dataMonth.forEach(d => {
         d.date = new Date(+d.year, +d.month - 1, 1);
         keys.forEach(k => d[k] = +d[k] || 0);
-        d.climate_region = d.climate_region || "Non défini";
+        d.climate_region = d.climate_region || "Undefined";
     });
     dataMonth.sort((a, b) => a.date - b.date);
     monthlyData = dataMonth;
     
-    // 2. Parsing des données annuelles
+    // Process yearly data
     dataYear.forEach(d => {
         d.year = +d.year;
         keys.forEach(k => d[k] = +d[k] || 0);
-        d.climate_region = d.climate_region || "Non défini";
+        d.climate_region = d.climate_region || "Undefined";
     });
     yearlyData = dataYear;
     
-    // 3. Données climatiques
     climateData = dataClimate;
     
-    // 4. Analyse des pays multi-sources vs mono-source
-    const countrySourceCount = new Map();
+    // Analyze countries
     const countries = Array.from(new Set(monthlyData.map(d => d.country)));
     
     countries.forEach(country => {
         const countryData = monthlyData.filter(d => d.country === country);
-        const sourceCount = countEnergySources(countryData);
+        const analysis = countEnergySources(countryData);
         const region = countryData[0].climate_region;
-        countrySourceCount.set(country, { count: sourceCount, region: region });
+        countrySourceCount.set(country, { 
+            count: analysis.count, 
+            region: region,
+            totals: analysis.totals 
+        });
     });
     
-    // 5. Gestion des Filtres
+    // Setup filters
     const regions = Array.from(new Set(monthlyData.map(d => d.climate_region))).sort();
     
     const regionSelect = d3.select("#regionSelect");
@@ -113,12 +141,11 @@ Promise.all([
         regionSelect.append("option").text(r).attr("value", r);
     });
     
-    // Fonction pour filtrer les pays
+    // Update country dropdown based on region
     function updateCountryOptions(region) {
         const filteredData = (region === "all") ? monthlyData : monthlyData.filter(d => d.climate_region === region);
         const countries = Array.from(new Set(filteredData.map(d => d.country))).sort();
         
-        // Séparer les pays multi-sources et mono-source
         const multiSourceCountries = [];
         const singleSourceCountries = [];
         
@@ -134,28 +161,24 @@ Promise.all([
         const countrySelect = d3.select("#countrySelect");
         countrySelect.html("");
         
-        // Ajouter les pays multi-sources
         if (multiSourceCountries.length > 0) {
             const optgroupMulti = countrySelect.append("optgroup")
-                .attr("label", `Pays Multi-Sources (${multiSourceCountries.length})`);
+                .attr("label", `Multi-Source Countries (${multiSourceCountries.length})`);
             multiSourceCountries.forEach(c => {
                 optgroupMulti.append("option").text(c).attr("value", c);
             });
         }
         
-        // Ajouter les pays mono-source
         if (singleSourceCountries.length > 0) {
             const optgroupSingle = countrySelect.append("optgroup")
-                .attr("label", `Pays Mono-Source (${singleSourceCountries.length})`);
+                .attr("label", `Single-Source Countries (${singleSourceCountries.length})`);
             singleSourceCountries.forEach(c => {
                 optgroupSingle.append("option").text(c).attr("value", c);
             });
         }
         
-        // Afficher les statistiques
-        updateStats(region, multiSourceCountries.length, singleSourceCountries.length);
+        updateStatistics(region, multiSourceCountries.length, singleSourceCountries.length);
         
-        // Initialiser avec le premier pays multi-source si disponible
         if (multiSourceCountries.length > 0) {
             countrySelect.property("value", multiSourceCountries[0]);
             updateChart(multiSourceCountries[0]);
@@ -167,21 +190,36 @@ Promise.all([
         }
     }
     
-    // Fonction pour afficher les statistiques
-    function updateStats(region, multiCount, singleCount) {
+    // Update statistics display
+    function updateStatistics(region, multiCount, singleCount) {
         const statsDiv = d3.select("#stats");
-        const regionText = region === "all" ? "Toutes régions" : region;
+        const regionText = region === "all" ? "All Regions" : region;
+        const totalCount = multiCount + singleCount;
+        
         statsDiv.html(`
-            <strong>Statistiques :</strong> ${regionText} - 
-            <span style="color: #27ae60;">${multiCount} pays multi-sources</span> | 
-            <span style="color: #e67e22;">${singleCount} pays mono-source</span>
+            <div class="stat-item">
+                <span class="stat-label">Region</span>
+                <span class="stat-value">${regionText}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Total Countries</span>
+                <span class="stat-value">${totalCount}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Multi-Source</span>
+                <span class="stat-value success">${multiCount}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Single-Source</span>
+                <span class="stat-value warning">${singleCount}</span>
+            </div>
         `);
     }
     
-    // Initialisation
+    // Initialize
     updateCountryOptions("all");
     
-    // Écouteurs d'événements
+    // Event listeners
     d3.select("#regionSelect").on("change", function() {
         updateCountryOptions(this.value);
     });
@@ -195,18 +233,16 @@ Promise.all([
         updateChart(currentCountry);
     });
     
-    // 6. Fonction de Dessin
+    // --- Main Chart Update Function ---
     function updateChart(selectedCountry) {
         const viewType = d3.select("#viewToggle").property("value");
         
-        // Choisir les données selon la vue
         let countryData;
         let isYearlyView = false;
         
         if (viewType === "yearly") {
             countryData = yearlyData.filter(d => d.country === selectedCountry);
             isYearlyView = true;
-            // Créer des dates pour les années
             countryData.forEach(d => {
                 d.date = new Date(d.year, 0, 1);
             });
@@ -220,14 +256,20 @@ Promise.all([
                 .attr("x", width / 2)
                 .attr("y", height / 2)
                 .attr("text-anchor", "middle")
-                .text("Aucune donnée disponible pour ce pays");
+                .style("font-size", "14px")
+                .style("fill", "#7f8c8d")
+                .text("No data available for this country");
             return;
         }
         
-        // Échelles
+        // Update chart title
+        const viewLabel = isYearlyView ? "Yearly Trends" : "Monthly Details";
+        d3.select("#chart-main-title").text(`${selectedCountry} - ${viewLabel}`);
+        
+        // Scales
         const x = d3.scaleTime()
-          .domain(d3.extent(countryData, d => d.date))
-          .range([0, width]);
+            .domain(d3.extent(countryData, d => d.date))
+            .range([0, width]);
         
         const yMax = d3.max(countryData, d => {
             return keys.reduce((acc, k) => acc + d[k], 0);
@@ -236,102 +278,186 @@ Promise.all([
         const yDomainMax = yMax ? yMax * 1.1 : 100;
         
         const y = d3.scaleLinear()
-          .domain([0, yDomainMax])
-          .range([height, 0]);
+            .domain([0, yDomainMax])
+            .range([height, 0]);
         
-        // Stack Generator
+        // Stack generator
         const stackedData = d3.stack()
-          .keys(keys)
-          (countryData);
+            .keys(keys)
+            (countryData);
         
         const area = d3.area()
-          .x(d => x(d.data.date))
-          .y0(d => y(d[0]))
-          .y1(d => y(d[1]));
+            .x(d => x(d.data.date))
+            .y0(d => y(d[0]))
+            .y1(d => y(d[1]))
+            .curve(d3.curveMonotoneX);
         
-        // Nettoyage
+        // Clear previous content
         svg.selectAll("*").remove();
         
-        // Axe X
-        const xAxis = isYearlyView ? d3.axisBottom(x).ticks(d3.timeYear.every(1)) : d3.axisBottom(x).ticks(8);
+        // Add grid
         svg.append("g")
-          .attr("transform", `translate(0,${height})`)
-          .call(xAxis)
-          .attr("class", "axis");
+            .attr("class", "grid")
+            .call(d3.axisLeft(y)
+                .tickSize(-width)
+                .tickFormat("")
+            );
         
-        // Axe Y
+        // X Axis
+        const xAxisFormat = isYearlyView ? d3.timeFormat("%Y") : d3.timeFormat("%b %Y");
+        const xAxis = d3.axisBottom(x)
+            .ticks(isYearlyView ? d3.timeYear.every(1) : 8)
+            .tickFormat(xAxisFormat);
+            
         svg.append("g")
-          .call(d3.axisLeft(y))
-          .attr("class", "axis");
+            .attr("transform", `translate(0,${height})`)
+            .attr("class", "axis")
+            .call(xAxis)
+            .selectAll("text")
+            .attr("transform", "rotate(-45)")
+            .style("text-anchor", "end");
         
-        // Titre Axe Y
+        // Y Axis
+        svg.append("g")
+            .attr("class", "axis")
+            .call(d3.axisLeft(y).ticks(8));
+        
+        // Y Axis Label
         svg.append("text")
-          .attr("transform", "rotate(-90)")
-          .attr("y", -40)
-          .attr("x", -height / 2)
-          .style("text-anchor", "middle")
-          .text("Consommation (TWh)");
+            .attr("transform", "rotate(-90)")
+            .attr("y", -60)
+            .attr("x", -height / 2)
+            .style("text-anchor", "middle")
+            .style("font-size", "13px")
+            .style("font-weight", "600")
+            .style("fill", "#2c3e50")
+            .text("Energy Consumption (TWh)");
         
-        // Grille
-        svg.append("g")
-          .attr("class", "grid")
-          .call(d3.axisLeft(y).tickSize(-width).tickFormat(""));
+        // X Axis Label
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", height + 60)
+            .style("text-anchor", "middle")
+            .style("font-size", "13px")
+            .style("font-weight", "600")
+            .style("fill", "#2c3e50")
+            .text("Time Period");
         
-        // Dessin des aires
-        svg.selectAll(".layer")
-          .data(stackedData)
-          .join("path")
-          .attr("class", "layer")
-          .attr("d", area)
-          .style("fill", d => colorScale(d.key))
-          .style("opacity", 0.85)
-          .on("mouseover", function(event, d) {
-                d3.select(this).style("opacity", 1).style("stroke", "#333").style("stroke-width", "2px");
+        // Draw areas with transition
+        const layers = svg.selectAll(".layer")
+            .data(stackedData)
+            .join("path")
+            .attr("class", "layer")
+            .style("fill", d => colorScale(d.key))
+            .style("opacity", 0)
+            .attr("d", area);
+        
+        layers.transition()
+            .duration(config.transitionDuration)
+            .style("opacity", 0.85);
+        
+        layers
+            .on("mouseover", function(event, d) {
+                d3.select(this)
+                    .transition()
+                    .duration(200)
+                    .style("opacity", 1)
+                    .style("stroke", "#1a1a2e")
+                    .style("stroke-width", "2px");
             })
-          .on("mousemove", function(event, d) {
+            .on("mousemove", function(event, d) {
                 const label = labels[d.key];
-                tooltip.style("opacity", 1)
-                  .html(`<strong>${label}</strong>`)
-                  .style("left", (event.pageX + 15) + "px")
-                  .style("top", (event.pageY - 28) + "px");
+                
+                // Find closest data point
+                const mouseX = d3.pointer(event, this)[0];
+                const xDate = x.invert(mouseX);
+                
+                // Get closest point
+                const bisect = d3.bisector(d => d.data.date).left;
+                const index = bisect(d, xDate);
+                const dataPoint = d[index];
+                
+                if (dataPoint) {
+                    const value = dataPoint[1] - dataPoint[0];
+                    
+                    tooltip.style("opacity", 1)
+                        .html(`
+                            <div style="font-weight: 600; margin-bottom: 4px;">${label}</div>
+                            <div style="font-size: 0.9em;">${formatNumber(value)} TWh</div>
+                        `)
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                }
             })
-          .on("mouseout", function() {
-                d3.select(this).style("opacity", 0.85).style("stroke", "none");
+            .on("mouseout", function() {
+                d3.select(this)
+                    .transition()
+                    .duration(200)
+                    .style("opacity", 0.85)
+                    .style("stroke", "none");
                 tooltip.style("opacity", 0);
             });
         
-        // Légende
-        const legend = svg.selectAll(".legend")
-          .data(keys.slice().reverse()) 
-          .enter().append("g")
-          .attr("transform", (d, i) => `translate(${width + 20}, ${i * 25})`);
+        // Legend
+        const legend = svg.append("g")
+            .attr("class", "legend")
+            .attr("transform", `translate(${width + 30}, 0)`);
         
-        legend.append("rect")
-          .attr("width", 15)
-          .attr("height", 15)
-          .style("fill", d => colorScale(d));
+        const legendItems = legend.selectAll(".legend-item")
+            .data(keys.slice().reverse())
+            .enter()
+            .append("g")
+            .attr("class", "legend-item")
+            .attr("transform", (d, i) => `translate(0, ${i * 30})`);
         
-        legend.append("text")
-          .attr("x", 25)
-          .attr("y", 12)
-          .text(d => labels[d])
-          .style("font-size", "12px")
-          .attr("alignment-baseline", "middle");
+        legendItems.append("rect")
+            .attr("width", 18)
+            .attr("height", 18)
+            .attr("rx", 3)
+            .style("fill", d => colorScale(d));
         
-        // Titre
-        const viewText = isYearlyView ? "(Vue Annuelle)" : "(Vue Mensuelle)";
-        svg.append("text")
-          .attr("x", width / 2)
-          .attr("y", -10)
-          .attr("text-anchor", "middle")
-          .style("font-size", "16px")
-          .style("font-weight", "bold")
-          .text(`Mix Énergétique : ${selectedCountry} ${viewText}`);
+        legendItems.append("text")
+            .attr("x", 26)
+            .attr("y", 9)
+            .attr("dy", "0.35em")
+            .text(d => labels[d])
+            .style("font-size", "13px")
+            .style("font-weight", "500")
+            .style("fill", "#2c3e50");
+        
+        // Add summary statistics
+        const countryInfo = countrySourceCount.get(selectedCountry);
+        if (countryInfo) {
+            const summaryY = keys.length * 30 + 40;
+            
+            legend.append("text")
+                .attr("y", summaryY)
+                .style("font-size", "12px")
+                .style("font-weight", "600")
+                .style("fill", "#7f8c8d")
+                .text("Total Consumption:");
+            
+            const totalConsumption = Object.values(countryInfo.totals).reduce((a, b) => a + b, 0);
+            
+            legend.append("text")
+                .attr("y", summaryY + 20)
+                .style("font-size", "16px")
+                .style("font-weight", "700")
+                .style("fill", "#2c3e50")
+                .text(`${formatNumber(totalConsumption)} TWh`);
+        }
     }
     
 }).catch(error => {
     console.error("Error loading data:", error);
-    d3.select("#chart").append("p")
-      .style("color", "red")
-      .text("Erreur lors du chargement des données. Vérifiez les chemins des fichiers CSV.");
+    d3.select("#chart")
+        .append("div")
+        .style("padding", "40px")
+        .style("text-align", "center")
+        .style("color", "#e74c3c")
+        .html(`
+            <h3>Data Loading Error</h3>
+            <p>Please verify that CSV files are in the correct location:</p>
+            <code>../data/exported/</code>
+        `);
 });
