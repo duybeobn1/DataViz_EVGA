@@ -66,9 +66,27 @@
     <input id="year-slider" type="range" min="2022" max="2024" step="1">
     <br><br>
 
-    <label for="dim-slider">Dimension:</label>
-    <input type="range" id="dim-slider">
-    <span id="dimension-name">Dimension : N/A</span>
+    <label for="dim-select">Dimension : </label>
+    <select id="dim-select">
+      <option value="temperature">Température</option>
+      <option value="humidity">Humidité</option>
+      <option value="precipitation">Précipitation</option>
+      <option value="wind_speed">Vitesse du vent</option>
+      <option value="wetbulb_temperature">Température de bulbe humide</option>
+      <option value="WUE_FixedApproachDirect(L/KWh)">WUE (Approche Fixe Directe)</option>
+      <option value="WUE_FixedColdWaterDirect(L/KWh)">WUE (Eau Froide Fixe Directe)</option>
+      <option value="WUE_Indirect(L/KWh)">WUE (Indirecte)</option>
+      <option value="Leakages (%)">Fuites (%)</option>
+      <option value="Total energy - TWh">Énergie totale (TWh)</option>
+      <option value="Total renewables - TWh">Renouvelables totales (TWh)</option>
+      <option value="Total fossil fuels - TWh">Énergies fossiles totales (TWh)</option>
+      <option value="Coal consumption - TWh">Consommation de charbon (TWh)</option>
+      <option value="Gas consumption - TWh">Consommation de gaz (TWh)</option>
+      <option value="Oil consumption - TWh">Consommation de pétrole (TWh)</option>
+      <option value="Low carbon - TWh">Faible en carbone (TWh)</option>
+      <option value="Other - TWh">Autre (TWh)</option>
+      <option value="climate_region">Région climatique</option>
+    </select>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     
